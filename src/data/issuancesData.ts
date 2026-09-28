@@ -8,6 +8,8 @@ export interface IssuanceItem {
   receivedPrintedBy?: string;
   datePrinted?: string;
   status?: string;
+  fileUrl?: string;
+  fileName?: string;
 }
 
 // Initialized empty as requested: "remove the inputed in the regional special order cy 20206 order and only the admin can input in it"

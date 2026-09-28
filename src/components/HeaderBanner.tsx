@@ -205,32 +205,30 @@ export const HeaderBanner: React.FC<HeaderBannerProps> = ({
             )}
           </div>
 
-          {/* Administrative Issuances (Direct button, no dropdown, matches screenshot) */}
+          {/* 2026 Tab (Direct button, matches user specification: 'for administrative issuances remove it and its just 2026') */}
           <button
-            onClick={() => onSelectNav('Administrative Issuances')}
+            onClick={() => onSelectNav('2026')}
             className={`transition-colors cursor-pointer ${
-              activeNav === 'Administrative Issuances'
+              activeNav === '2026' || activeNav === 'Administrative Issuances'
                 ? 'font-bold text-slate-950'
                 : 'hover:text-blue-900 text-slate-800'
             }`}
           >
-            Administrative Issuances
+            2026
           </button>
 
-          {/* DSWD Staff Sign In / Account status */}
+          {/* Admin status button */}
           <button
             onClick={onOpenAuth}
-            className={`hidden lg:flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors cursor-pointer ${
               userEmail
-                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                : 'bg-white/80 text-blue-900 border border-blue-200 hover:bg-white'
+                ? 'bg-blue-900 text-white hover:bg-blue-950 font-medium'
+                : 'bg-white/80 text-slate-800 border border-slate-300 hover:bg-white'
             }`}
-            title={userEmail ? `Logged in as ${userEmail}` : 'Click to verify DSWD personnel access'}
+            title={userEmail ? `Admin mode active (${userEmail})` : 'Click to enable Admin mode'}
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-blue-700" />
-            <span className="font-medium truncate max-w-[130px]">
-              {userEmail ? userEmail.replace('@dswd.gov.ph', '') : 'DSWD Staff Login'}
-            </span>
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+            <span>{userEmail ? 'Admin Mode' : 'Admin Login'}</span>
           </button>
         </nav>
       </div>
@@ -251,12 +249,12 @@ export const HeaderBanner: React.FC<HeaderBannerProps> = ({
           >
             Templates
           </h1>
-        ) : activeNav === 'Administrative Issuances' ? (
+        ) : activeNav === '2026' || activeNav === 'Administrative Issuances' ? (
           <h1
-            className="text-4xl sm:text-6xl md:text-7xl lg:text-[6.5rem] font-bold text-[#001f94] tracking-[0.04em] leading-tight"
+            className="text-5xl sm:text-7xl md:text-8xl lg:text-[7.5rem] font-bold text-[#001f94] tracking-[0.06em] leading-none"
             style={{ fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}
           >
-            Administrative Issuances 2026
+            2026
           </h1>
         ) : (
           <h1

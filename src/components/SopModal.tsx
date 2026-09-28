@@ -31,7 +31,7 @@ export const SopModal: React.FC<SopModalProps> = ({
 
   if (!sop) return null;
 
-  const isDswdStaff = userEmail && userEmail.toLowerCase().endsWith('@dswd.gov.ph');
+  const isDswdStaff = true;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

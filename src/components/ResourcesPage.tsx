@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { ExternalLink, Upload, Trash2, Plus, FileText, CheckCircle2, Shield } from 'lucide-react';
+import { ExternalLink, Upload, Trash2, Check, Loader2, AlertCircle } from 'lucide-react';
 import { PdfDoc } from '../types';
+import { saveFileBlob, deleteFile, getFileUrl } from '../utils/fileStorage';
 
 interface ResourcesPageProps {
   onBack: () => void;
@@ -15,87 +16,125 @@ interface ResourcesPageProps {
 export const ResourcesPage: React.FC<ResourcesPageProps> = ({
   onBack,
   onOpenPdf,
-  userEmail,
-  onOpenAuth,
   pdfList,
   onAddPdf,
   onDeletePdf,
 }) => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newAuthor, setNewAuthor] = useState('Records Administration Management Section FO 01');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccessMsg, setUploadSuccessMsg] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedFile(file);
-      if (!newTitle) {
-        setNewTitle(file.name);
-      }
+  const handleSelectFile = (file: File) => {
+    setSelectedFile(file);
+    setErrorMessage(null);
+    if (!newTitle || newTitle.trim() === '') {
+      setNewTitle(file.name);
     }
   };
 
-  const handleUploadSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
+  const handleOpenPdfWithContent = async (doc: PdfDoc) => {
+    let fileUrl = doc.fileUrl;
+    if (!fileUrl && doc.isCustomUploaded) {
+      try {
+        const stored = await getFileUrl(doc.id);
+        if (stored) {
+          fileUrl = stored;
+        }
+      } catch (err) {
+        console.warn('Could not fetch stored file:', err);
+      }
+    }
+    onOpenPdf({ ...doc, fileUrl });
+  };
 
-    let fileUrl: string | undefined = undefined;
-    if (selectedFile) {
-      fileUrl = URL.createObjectURL(selectedFile);
+  const handleUploadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim()) {
+      setErrorMessage('Please provide a document title.');
+      return;
     }
 
-    const today = new Date();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const dateFormatted = `${months[today.getMonth()]} ${today.getDate()}`;
+    setIsUploading(true);
+    setErrorMessage(null);
 
-    const newDoc: PdfDoc = {
-      id: `custom-${Date.now()}`,
-      title: newTitle.endsWith('.pdf') ? newTitle : `${newTitle}.pdf`,
-      lastModified: `${dateFormatted} ${newAuthor}`,
-      author: newAuthor,
-      fileUrl: fileUrl,
-      fileSize: selectedFile ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB` : '1.2 MB',
-      isCustomUploaded: true,
-    };
+    try {
+      const docId = `custom-${Date.now()}`;
+      let fileUrl: string | undefined = undefined;
 
-    onAddPdf(newDoc);
-    setIsUploadModalOpen(false);
-    setNewTitle('');
-    setSelectedFile(null);
+      if (selectedFile) {
+        await saveFileBlob(docId, selectedFile);
+        fileUrl = (await getFileUrl(docId)) || undefined;
+      }
+
+      const today = new Date();
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const dateFormatted = `${months[today.getMonth()]} ${today.getDate()}`;
+      const finalTitle = newTitle.toLowerCase().endsWith('.pdf') ? newTitle : `${newTitle}.pdf`;
+
+      const newDoc: PdfDoc = {
+        id: docId,
+        title: finalTitle,
+        lastModified: `${dateFormatted} Records Administration Management Section FO 01`,
+        author: 'Records Administration Management Section FO 01',
+        fileUrl: fileUrl,
+        fileSize: selectedFile ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB` : '1.2 MB',
+        isCustomUploaded: true,
+      };
+
+      onAddPdf(newDoc);
+      setIsUploadModalOpen(false);
+      setNewTitle('');
+      setSelectedFile(null);
+      setUploadSuccessMsg(`Uploaded "${finalTitle}" successfully.`);
+      setTimeout(() => setUploadSuccessMsg(null), 3000);
+    } catch (err) {
+      console.error('Upload error:', err);
+      setErrorMessage('Failed to save document. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteFile(id);
+    onDeletePdf(id);
   };
 
   return (
     <section className="w-full bg-[#f1eff7] px-4 sm:px-8 md:px-12 pt-2 pb-12 select-none">
-      <div className="max-w-[1500px] mx-auto">
-        {/* Admin Bar Header */}
-        <div className="flex items-center justify-between pb-4 pt-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium">
-              Reference Document Repository
-            </span>
-            {userEmail && (
-              <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-mono font-medium">
-                Admin: {userEmail}
-              </span>
-            )}
+      <div className="max-w-[1500px] mx-auto space-y-4">
+        {/* Top Control Bar */}
+        <div className="flex items-center justify-between pt-1">
+          <div className="text-xs text-slate-600 font-medium">
+            Records Disposition Schedule (RDS)
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsUploadModalOpen(true)}
-              className="px-3 py-1.5 bg-[#00178c] hover:bg-blue-900 text-white rounded text-xs font-medium flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Upload PDF as Admin</span>
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              setErrorMessage(null);
+              setIsUploadModalOpen(true);
+            }}
+            className="px-3.5 py-1.5 bg-[#00178c] hover:bg-blue-900 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Upload PDF</span>
+          </button>
         </div>
 
-        {/* 2-Column Split Layout matching Screenshot 1 & 2 */}
+        {uploadSuccessMsg && (
+          <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded text-xs flex items-center gap-2 animate-in fade-in">
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{uploadSuccessMsg}</span>
+          </div>
+        )}
+
+        {/* 2-Column Split Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: White Table Container (Google Drive / Embed Style) */}
+          {/* Left Column: White Table Container */}
           <div className="lg:col-span-7 bg-white rounded-xs shadow-xs border border-slate-200 overflow-hidden">
             {/* Table Header */}
             <div className="px-6 py-3.5 border-b border-slate-200 flex items-center justify-between text-xs bg-white">
@@ -108,11 +147,10 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({
                 </span>
               </div>
 
-              {/* Square External Link Button in top right header */}
               <button
-                onClick={() => onOpenPdf(pdfList[0])}
-                className="w-7 h-7 bg-[#94a3b8] hover:bg-slate-500 text-white flex items-center justify-center rounded-xs transition-colors shrink-0 shadow-2xs"
-                title="Open Folder in New View"
+                onClick={() => handleOpenPdfWithContent(pdfList[0])}
+                className="w-7 h-7 bg-[#94a3b8] hover:bg-slate-500 text-white flex items-center justify-center rounded-xs transition-colors shrink-0 shadow-2xs cursor-pointer"
+                title="Open Folder View"
               >
                 <ExternalLink className="w-4 h-4" />
               </button>
@@ -121,7 +159,6 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({
             {/* Table Rows List */}
             <div className="divide-y divide-slate-100">
               {pdfList.map((doc) => {
-                // Split date and author for authentic styling
                 const parts = doc.lastModified.split(' ');
                 const datePart = parts.slice(0, 2).join(' ');
                 const authorPart = parts.slice(2).join(' ');
@@ -130,12 +167,10 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({
                   <div
                     key={doc.id}
                     className="px-6 py-3.5 flex items-center justify-between hover:bg-slate-50 transition-colors group cursor-pointer"
-                    onClick={() => onOpenPdf(doc)}
+                    onClick={() => handleOpenPdfWithContent(doc)}
                   >
                     <div className="flex items-center gap-8 w-full pr-4">
-                      {/* Left: Red PDF icon + Title */}
                       <div className="flex items-center gap-2.5 w-1/2 sm:w-5/12 min-w-0">
-                        {/* Red PDF Icon */}
                         <div className="bg-[#dc2626] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-[2px] tracking-tight shrink-0 flex items-center justify-center shadow-2xs">
                           PDF
                         </div>
@@ -144,22 +179,20 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({
                         </span>
                       </div>
 
-                      {/* Right: Last Modified */}
                       <div className="flex-1 text-xs text-slate-500 truncate">
                         <span className="font-semibold text-slate-800">{datePart}</span>{' '}
                         <span className="text-slate-500">{authorPart}</span>
                       </div>
                     </div>
 
-                    {/* Admin Delete Action for custom uploads */}
                     {doc.isCustomUploaded && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDeletePdf(doc.id);
+                          handleDelete(doc.id);
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 transition-opacity"
-                        title="Delete custom upload"
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 transition-opacity cursor-pointer"
+                        title="Delete upload"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -170,7 +203,7 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Text Description Paragraph matching Screenshot 1 & 2 */}
+          {/* Right Column: Text Description */}
           <div className="lg:col-span-5 pt-2 sm:pt-4 lg:pl-6">
             <p className="text-base sm:text-[1.125rem] text-[#111111] leading-[1.65] font-normal select-text">
               This section contains essential reference materials, including the Updated Records Disposition Schedule
@@ -180,7 +213,7 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({
           </div>
         </div>
 
-        {/* Back Button matching Screenshot 2 */}
+        {/* Back Button */}
         <div className="flex justify-end pt-8 pb-2">
           <button
             onClick={onBack}
@@ -191,36 +224,61 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({
         </div>
       </div>
 
-      {/* Admin Upload Modal */}
+      {/* Simple Upload Modal */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="bg-[#00178c] text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-base">Admin PDF Upload</h3>
-              </div>
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="bg-[#00178c] text-white px-5 py-3.5 flex items-center justify-between">
+              <h3 className="font-bold text-base">Upload PDF Document</h3>
               <button
                 onClick={() => setIsUploadModalOpen(false)}
-                className="text-white/80 hover:text-white p-1 rounded"
+                className="text-white/80 hover:text-white p-1 rounded cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleUploadSubmit} className="p-6 space-y-4 text-xs sm:text-sm text-slate-800">
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-900 leading-relaxed">
-                Upload new Records Disposition Schedule (RDS) or circular documents to the repository. The uploaded file will be available immediately in the table.
-              </div>
+            <form onSubmit={handleUploadSubmit} className="p-5 space-y-3.5 text-xs sm:text-sm text-slate-800">
+              {errorMessage && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Select PDF File:</label>
+                <label className="block font-semibold text-slate-700 mb-1">Select File:</label>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded p-4 text-center cursor-pointer bg-slate-50 hover:bg-blue-50/50 transition-colors"
+                >
+                  <Upload className="w-6 h-6 text-slate-400 mx-auto mb-1.5" />
+                  {selectedFile ? (
+                    <div>
+                      <span className="font-semibold text-blue-900 block truncate">{selectedFile.name}</span>
+                      <span className="text-[11px] text-slate-500">
+                        {(selectedFile.size / 1024 / 1024).toFixed(2)} MB · Click to choose different file
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <span className="font-medium text-slate-700 block">Click to choose a PDF file</span>
+                      <span className="text-[11px] text-slate-400">PDF documents (.pdf)</span>
+                    </div>
+                  )}
+                </div>
+
                 <input
                   type="file"
-                  accept="application/pdf"
+                  accept=".pdf,application/pdf"
                   ref={fileInputRef}
-                  onChange={handleFileChange}
-                  className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[#00178c] file:text-white hover:file:bg-blue-900 cursor-pointer"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      handleSelectFile(e.target.files[0]);
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="hidden"
                 />
               </div>
 
@@ -229,37 +287,35 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. RDS_2026_Updated_Guidelines.pdf"
+                  placeholder="e.g. Updated RDS Guidelines 2026.pdf"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   className="w-full border border-slate-300 rounded px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Author / Division Attribution</label>
-                <input
-                  type="text"
-                  value={newAuthor}
-                  onChange={(e) => setNewAuthor(e.target.value)}
-                  className="w-full border border-slate-300 rounded px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-3 border-t border-slate-200">
+              <div className="pt-2 flex justify-end gap-2.5 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsUploadModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded text-slate-700 hover:bg-slate-100"
+                  className="px-4 py-1.5 border border-slate-300 rounded text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  disabled={isUploading}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#00178c] text-white font-semibold rounded hover:bg-blue-900 flex items-center gap-1.5"
+                  disabled={isUploading}
+                  className="px-5 py-1.5 bg-[#00178c] text-white font-semibold rounded hover:bg-blue-900 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
                 >
-                  <Upload className="w-4 h-4" />
-                  <span>Upload Document</span>
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Uploading...</span>
+                    </>
+                  ) : (
+                    <span>Upload</span>
+                  )}
                 </button>
               </div>
             </form>

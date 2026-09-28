@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ExternalLink, Folder, FileSpreadsheet, FileText, Table2, Download, Upload, Plus, Check } from 'lucide-react';
+import { ExternalLink, Folder, Table2, Download, Upload, Plus, Check } from 'lucide-react';
 import { TEMPLATES_DATA, TemplateItem } from '../data/templatesData';
+import { saveFileBlob, getFileUrl } from '../utils/fileStorage';
 
 interface TemplatesPageProps {
   onBack: () => void;
@@ -18,10 +19,15 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>(selectedCategory || 'all');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
   const [customTemplates, setCustomTemplates] = useState<TemplateItem[]>(() => {
     try {
       const saved = localStorage.getItem('ad_rams_custom_templates');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
     return [];
   });
@@ -37,12 +43,36 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
   const generalForms = allTemplates.filter((t) => t.category === 'general');
   const adminServicesForms = allTemplates.filter((t) => t.category === 'admin-services');
 
-  const handleDownload = (doc: TemplateItem) => {
+  const handleDownload = async (doc: TemplateItem) => {
     setDownloadSuccess(doc.title);
-    setTimeout(() => setDownloadSuccess(null), 3000);
+    setTimeout(() => setDownloadSuccess(null), 3500);
+
+    // If there is an uploaded file blob associated with this item:
+    const fileUrl = await getFileUrl(doc.id);
+    if (fileUrl) {
+      const a = document.createElement('a');
+      a.href = fileUrl;
+      a.download = doc.title;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      // Trigger a clean downloadable placeholder file with the official name
+      const ext = doc.fileType === 'excel' ? 'xlsx' : doc.fileType === 'sheets' ? 'csv' : 'docx';
+      const content = `DSWD Field Office 1 - Official Form Template\nTitle: ${doc.title}\nCategory: ${doc.categoryLabel}\nControlled Document - Records and Archives Management Section`;
+      const blob = new Blob([content], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.title.includes('.') ? doc.title : `${doc.title}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   };
 
-  const handleUploadSubmit = (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
@@ -53,8 +83,18 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
       'admin-services': 'ADMINISTRATIVE SERVICES FORMS',
     };
 
+    const docId = `custom-tpl-${Date.now()}`;
+
+    if (selectedFile) {
+      try {
+        await saveFileBlob(docId, selectedFile);
+      } catch (err) {
+        console.warn('Could not save template blob:', err);
+      }
+    }
+
     const newItem: TemplateItem = {
-      id: `custom-tpl-${Date.now()}`,
+      id: docId,
       title: newTitle,
       category: newCategory,
       categoryLabel: categoryLabelMap[newCategory],
@@ -72,9 +112,9 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
 
     setIsUploadOpen(false);
     setNewTitle('');
+    setSelectedFile(null);
   };
 
-  // Render authentic icon for each file type
   const renderFileIcon = (type: TemplateItem['fileType']) => {
     switch (type) {
       case 'folder':
@@ -250,9 +290,9 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
 
         {downloadSuccess && (
           <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded text-xs flex items-center gap-2 animate-in fade-in">
-            <Check className="w-4 h-4 text-emerald-600" />
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>
-              <strong>Downloading form:</strong> {downloadSuccess}
+              <strong>Downloading form template:</strong> {downloadSuccess}
             </span>
           </div>
         )}
@@ -297,13 +337,36 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
               <h3 className="font-bold text-base">Add / Upload Official Template</h3>
               <button
                 onClick={() => setIsUploadOpen(false)}
-                className="text-white/80 hover:text-white p-1 rounded"
+                className="text-white/80 hover:text-white p-1 rounded cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleUploadSubmit} className="p-6 space-y-4 text-xs sm:text-sm text-slate-800">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Upload File (Optional):</label>
+                <input
+                  type="file"
+                  accept=".docx,.xlsx,.xls,.pdf,.doc,.csv"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      const file = e.target.files[0];
+                      setSelectedFile(file);
+                      if (!newTitle) setNewTitle(file.name);
+                      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv')) {
+                        setNewFileType('excel');
+                      } else if (file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+                        setNewFileType('word');
+                      } else if (file.name.endsWith('.pdf')) {
+                        setNewFileType('word');
+                      }
+                    }
+                  }}
+                  className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[#00178c] file:text-white hover:file:bg-blue-900 cursor-pointer"
+                />
+              </div>
+
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Target Category *</label>
                 <select
@@ -348,13 +411,13 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsUploadOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded text-slate-700 hover:bg-slate-100"
+                  className="px-4 py-2 border border-slate-300 rounded text-slate-700 hover:bg-slate-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#00178c] text-white font-semibold rounded hover:bg-blue-900"
+                  className="px-5 py-2 bg-[#00178c] text-white font-semibold rounded hover:bg-blue-900 cursor-pointer shadow-xs"
                 >
                   Save Template
                 </button>

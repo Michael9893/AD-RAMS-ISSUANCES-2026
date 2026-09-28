@@ -54,12 +54,12 @@ const DEFAULT_PDF_LIST: PdfDoc[] = [
 ];
 
 export default function App() {
-  const [activeNav, setActiveNav] = useState<'Home' | 'Resources' | 'Templates' | 'Administrative Issuances'>('Home');
+  const [activeNav, setActiveNav] = useState<'Home' | 'Resources' | 'Templates' | '2026'>('Home');
   const [selectedTemplatesCategory, setSelectedTemplatesCategory] = useState<string | null>(null);
 
   const [selectedSop, setSelectedSop] = useState<SopItem | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>('admin@dswd.gov.ph');
 
   // PDF Document Viewer State
   const [selectedPdf, setSelectedPdf] = useState<PdfDoc | null>(null);
@@ -69,7 +69,10 @@ export default function App() {
     try {
       const saved = localStorage.getItem('ad_rams_pdf_list');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
     } catch {
       // ignore
@@ -81,9 +84,11 @@ export default function App() {
     setPdfList((prev) => {
       const updated = [newDoc, ...prev];
       try {
-        localStorage.setItem('ad_rams_pdf_list', JSON.stringify(updated));
-      } catch {
-        // ignore
+        // Strip large dataUrl/fileUrl to avoid browser localStorage quota limits
+        const sanitized = updated.map(({ fileUrl, ...rest }) => rest);
+        localStorage.setItem('ad_rams_pdf_list', JSON.stringify(sanitized));
+      } catch (err) {
+        console.warn('LocalStorage save failed:', err);
       }
       return updated;
     });
@@ -93,7 +98,8 @@ export default function App() {
     setPdfList((prev) => {
       const updated = prev.filter((d) => d.id !== id);
       try {
-        localStorage.setItem('ad_rams_pdf_list', JSON.stringify(updated));
+        const sanitized = updated.map(({ fileUrl, ...rest }) => rest);
+        localStorage.setItem('ad_rams_pdf_list', JSON.stringify(sanitized));
       } catch {
         // ignore
       }
@@ -121,8 +127,8 @@ export default function App() {
             setActiveNav('Templates');
             setSelectedTemplatesCategory('all');
             window.scrollTo({ top: 0, behavior: 'smooth' });
-          } else if (nav === 'Administrative Issuances') {
-            setActiveNav('Administrative Issuances');
+          } else if (nav === '2026' || nav === 'Administrative Issuances') {
+            setActiveNav('2026');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }
         }}
@@ -138,7 +144,7 @@ export default function App() {
 
       {/* Main Body Content */}
       <main className="flex-1 w-full">
-        {/* 2. Disclaimer Notice with Top and Bottom Dividers (appears on Home, Resources, Templates, and Issuances per screenshots) */}
+        {/* 2. Disclaimer Notice with Top and Bottom Dividers (appears on Home, Resources, Templates, and 2026 per screenshots) */}
         <DisclaimerNotice />
 
         {activeNav === 'Home' && (
@@ -184,8 +190,8 @@ export default function App() {
           />
         )}
 
-        {activeNav === 'Administrative Issuances' && (
-          /* Administrative Issuances 2026 Page View (Carbon copy of uploaded screenshots) */
+        {(activeNav === '2026' || (activeNav as string) === 'Administrative Issuances') && (
+          /* 2026 Issuances Page View */
           <IssuancesPage
             onBack={() => {
               setActiveNav('Home');

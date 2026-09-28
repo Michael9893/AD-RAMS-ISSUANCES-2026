@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { ISSUANCES_CY_2026, IssuanceItem } from '../data/issuancesData';
-import { Search, Plus, FileText, Download, Printer, X, Check, Shield, Lock, Trash2, ShieldCheck, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, Plus, FileText, Download, Printer, X, Trash2, Loader2 } from 'lucide-react';
+import { IssuanceItem } from '../data/issuancesData';
+import { saveFileBlob, getFileUrl, deleteFile } from '../utils/fileStorage';
 
 interface IssuancesPageProps {
   onBack: () => void;
@@ -8,20 +9,25 @@ interface IssuancesPageProps {
   onOpenAuth: () => void;
 }
 
-export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail, onOpenAuth }) => {
+export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack }) => {
   const [search, setSearch] = useState('');
   const [selectedIssuance, setSelectedIssuance] = useState<IssuanceItem | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [authWarning, setAuthWarning] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [activeDownloadUrl, setActiveDownloadUrl] = useState<string | null>(null);
 
-  const isAdmin = Boolean(userEmail && userEmail.toLowerCase().endsWith('@dswd.gov.ph'));
-
+  // Initialize empty as requested: "remove the inputed in the regional special order cy 20206 order and only the admin can input in it"
   const [issuancesList, setIssuancesList] = useState<IssuanceItem[]>(() => {
     try {
+      localStorage.removeItem('ad_rams_issuances_2026');
       const saved = localStorage.getItem('ad_rams_issuances_2026_clean');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch {}
-    return ISSUANCES_CY_2026; // empty []
+    return [];
   });
 
   const [newDrn, setNewDrn] = useState('');
@@ -30,7 +36,7 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
   const [newConcernedStaff, setNewConcernedStaff] = useState('');
   const [newPreparedBy, setNewPreparedBy] = useState('LDS');
   const [newReceivedBy, setNewReceivedBy] = useState('');
-  const [newDatePrinted, setNewDatePrinted] = useState('');
+  const [newDatePrinted, setNewDatePrinted] = useState('Jan 15, 2026');
 
   const filteredList = issuancesList.filter(
     (item) =>
@@ -41,23 +47,22 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
       item.preparedByOdsu.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleOpenAddModal = () => {
-    if (!isAdmin) {
-      setAuthWarning('Access Restricted: Only authorized DSWD administrators can input records into the CY 2026 Databank. Please log in with your @dswd.gov.ph account.');
-      onOpenAuth();
-      return;
-    }
-    setAuthWarning(null);
-    setIsAddModalOpen(true);
-  };
-
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isAdmin) {
-      onOpenAuth();
-      return;
-    }
     if (!newDescription.trim() || !newDrn.trim()) return;
+
+    setIsSaving(true);
+    let fileName: string | undefined = undefined;
+    const fileId = `issuance-file-${Date.now()}`;
+
+    if (selectedFile) {
+      fileName = selectedFile.name;
+      try {
+        await saveFileBlob(fileId, selectedFile);
+      } catch (err) {
+        console.warn('Could not save file blob:', err);
+      }
+    }
 
     const newItem: IssuanceItem = {
       rsoNo: issuancesList.length + 1,
@@ -69,6 +74,8 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
       receivedPrintedBy: newReceivedBy,
       datePrinted: newDatePrinted,
       status: '',
+      fileUrl: selectedFile ? fileId : undefined,
+      fileName: fileName,
     };
 
     const updated = [...issuancesList, newItem];
@@ -77,32 +84,37 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
       localStorage.setItem('ad_rams_issuances_2026_clean', JSON.stringify(updated));
     } catch {}
 
+    setIsSaving(false);
     setIsAddModalOpen(false);
     setNewDrn('');
     setNewDescription('');
     setNewConcernedStaff('');
     setNewReceivedBy('');
-    setNewDatePrinted('');
+    setSelectedFile(null);
   };
 
-  const handleDeleteItem = (rsoNo: number) => {
-    if (!isAdmin) return;
+  const handleDeleteItem = async (rsoNo: number) => {
+    const target = issuancesList.find((i) => i.rsoNo === rsoNo);
+    if (target?.fileUrl) {
+      await deleteFile(target.fileUrl);
+    }
     const updated = issuancesList
       .filter((item) => item.rsoNo !== rsoNo)
-      .map((item, idx) => ({ ...item, rsoNo: idx + 1 })); // renumber
+      .map((item, idx) => ({ ...item, rsoNo: idx + 1 }));
     setIssuancesList(updated);
     try {
       localStorage.setItem('ad_rams_issuances_2026_clean', JSON.stringify(updated));
     } catch {}
   };
 
-  const handleClearAll = () => {
-    if (!isAdmin) return;
-    if (confirm('Are you sure you want to clear all entered 2026 Regional Special Orders?')) {
-      setIssuancesList([]);
-      try {
-        localStorage.removeItem('ad_rams_issuances_2026_clean');
-      } catch {}
+  const handleViewIssuance = async (item: IssuanceItem) => {
+    setSelectedIssuance(item);
+    setActiveDownloadUrl(null);
+    if (item.fileUrl) {
+      const url = await getFileUrl(item.fileUrl);
+      if (url) {
+        setActiveDownloadUrl(url);
+      }
     }
   };
 
@@ -111,21 +123,8 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
       <div className="max-w-[1550px] mx-auto space-y-4">
         {/* Top Control Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-          <div className="flex items-center gap-3">
-            <span className="text-xs sm:text-[13px] text-slate-800 font-sans font-medium">
-              Databank of Issuances CY 2026
-            </span>
-            {isAdmin ? (
-              <span className="text-[11px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded font-mono flex items-center gap-1 font-medium">
-                <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                <span>Admin Input Enabled ({userEmail})</span>
-              </span>
-            ) : (
-              <span className="text-[11px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded font-mono flex items-center gap-1">
-                <Lock className="w-3 h-3 text-amber-600" />
-                <span>Admin Input Protected</span>
-              </span>
-            )}
+          <div className="text-xs sm:text-[13px] text-slate-700 font-medium">
+            Regional Special Orders CY 2026
           </div>
 
           <div className="flex items-center gap-3">
@@ -143,53 +142,14 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
             )}
 
             <button
-              onClick={handleOpenAddModal}
-              className={`px-3 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer ${
-                isAdmin
-                  ? 'bg-[#00178c] hover:bg-blue-900 text-white'
-                  : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300'
-              }`}
-              title={isAdmin ? 'Add new RSO entry' : 'Admin login required to input'}
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-3.5 py-1.5 bg-[#00178c] hover:bg-blue-900 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
             >
-              {isAdmin ? (
-                <>
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Input 2026 Issuance (Admin)</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Admin Login to Input</span>
-                </>
-              )}
+              <Plus className="w-3.5 h-3.5" />
+              <span>Input 2026 Order</span>
             </button>
-
-            {isAdmin && issuancesList.length > 0 && (
-              <button
-                onClick={handleClearAll}
-                className="px-2.5 py-1 text-xs text-rose-700 hover:bg-rose-50 border border-rose-200 rounded transition-colors"
-                title="Clear all entries"
-              >
-                Clear All
-              </button>
-            )}
           </div>
         </div>
-
-        {authWarning && (
-          <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded text-xs flex items-center justify-between animate-in fade-in">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>{authWarning}</span>
-            </div>
-            <button
-              onClick={() => onOpenAuth()}
-              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-semibold"
-            >
-              Login as Admin
-            </button>
-          </div>
-        )}
 
         {/* Databank Table Container */}
         <div className="bg-white rounded-xs border border-slate-300 shadow-xs overflow-hidden">
@@ -216,7 +176,6 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
 
           {/* Table Data Rows or Empty State */}
           {issuancesList.length === 0 ? (
-            /* Empty State as requested: "remove the inputed in the regional special order cy 20206 order and only the admin can input in it" */
             <div className="py-16 px-4 text-center bg-white space-y-3">
               <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
                 <FileText className="w-6 h-6 text-slate-400" />
@@ -226,26 +185,17 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
                   No Regional Special Orders recorded for CY 2026
                 </h4>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  The CY 2026 Regional Special Order registry is currently empty. Only authorized AD-RAMS administrators can input and circularize official issuance records.
+                  The CY 2026 registry is currently empty. Click below to input a new Regional Special Order.
                 </p>
               </div>
 
               <div className="pt-2">
                 <button
-                  onClick={handleOpenAddModal}
+                  onClick={() => setIsAddModalOpen(true)}
                   className="px-4 py-2 bg-[#001484] hover:bg-blue-900 text-white text-xs font-semibold rounded shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
                 >
-                  {isAdmin ? (
-                    <>
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Input First 2026 RSO Entry</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="w-3.5 h-3.5 text-amber-300" />
-                      <span>Authenticate as Admin to Input Records</span>
-                    </>
-                  )}
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Input First 2026 Order</span>
                 </button>
               </div>
             </div>
@@ -256,58 +206,41 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
                   key={item.rsoNo}
                   className="grid grid-cols-12 gap-2 px-3 py-2.5 items-start hover:bg-blue-50/50 transition-colors group"
                 >
-                  {/* RSO No */}
                   <div className="col-span-1 text-center font-medium text-slate-800">
                     {item.rsoNo}
                   </div>
-
-                  {/* DRN */}
                   <div className="col-span-2 font-mono text-[11px] sm:text-xs text-slate-700 break-words">
                     {item.drn}
                   </div>
-
-                  {/* Subject */}
                   <div className="col-span-2 text-slate-800 leading-snug">
                     {item.subject}
                   </div>
-
-                  {/* Description (Blue Underlined Clickable Link) */}
                   <div className="col-span-3">
                     <button
-                      onClick={() => setSelectedIssuance(item)}
+                      onClick={() => handleViewIssuance(item)}
                       className="text-left text-[#1523a6] hover:text-blue-900 underline font-normal leading-snug cursor-pointer transition-colors"
                     >
                       {item.description}
                     </button>
                   </div>
-
-                  {/* Concerned Staff */}
                   <div className="col-span-1 text-slate-700 leading-snug text-[11.5px]">
                     {item.concernedStaff}
                   </div>
-
-                  {/* Prepared by ODSU */}
                   <div className="col-span-1 text-center font-medium text-slate-700">
                     {item.preparedByOdsu}
                   </div>
-
-                  {/* RECEIVED / PRINTED BY */}
                   <div className="col-span-1 text-slate-700 text-[11.5px]">
                     {item.receivedPrintedBy || ''}
                   </div>
-
-                  {/* DATE PRINTED & Admin Action */}
                   <div className="col-span-1 flex items-center justify-between text-slate-700 text-[11px]">
                     <span className="w-full text-center">{item.datePrinted || ''}</span>
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleDeleteItem(item.rsoNo)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 transition-opacity"
-                        title="Delete entry"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleDeleteItem(item.rsoNo)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 transition-opacity cursor-pointer"
+                      title="Delete entry"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -321,7 +254,7 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
           )}
         </div>
 
-        {/* Back Button matching other pages */}
+        {/* Back Button */}
         <div className="flex justify-end pt-4 pb-2">
           <button
             onClick={onBack}
@@ -345,7 +278,7 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
               </div>
               <button
                 onClick={() => setSelectedIssuance(null)}
-                className="text-white/80 hover:text-white p-1 rounded"
+                className="text-white/80 hover:text-white p-1 rounded cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -390,17 +323,40 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
                 </div>
               </div>
 
+              {selectedIssuance.fileName && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded flex items-center justify-between">
+                  <div className="flex items-center gap-2 truncate pr-2">
+                    <FileText className="w-4 h-4 text-blue-700 shrink-0" />
+                    <span className="font-medium text-blue-900 text-xs truncate">
+                      {selectedIssuance.fileName}
+                    </span>
+                  </div>
+                  {activeDownloadUrl ? (
+                    <a
+                      href={activeDownloadUrl}
+                      download={selectedIssuance.fileName}
+                      className="px-3 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded text-xs font-semibold flex items-center gap-1 shadow-xs shrink-0 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download</span>
+                    </a>
+                  ) : (
+                    <span className="text-xs text-slate-500 italic">Document attached</span>
+                  )}
+                </div>
+              )}
+
               <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
                 <button
                   onClick={() => window.print()}
-                  className="px-4 py-2 border border-slate-300 rounded text-slate-700 hover:bg-slate-100 flex items-center gap-1.5"
+                  className="px-4 py-2 border border-slate-300 rounded text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
                   <span>Print RSO Slip</span>
                 </button>
                 <button
                   onClick={() => setSelectedIssuance(null)}
-                  className="px-5 py-2 bg-[#001484] text-white rounded font-medium hover:bg-blue-900"
+                  className="px-5 py-2 bg-[#001484] text-white rounded font-medium hover:bg-blue-900 cursor-pointer"
                 >
                   Close
                 </button>
@@ -410,34 +366,27 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
         </div>
       )}
 
-      {/* Admin Add Issuance Modal */}
+      {/* Simple Add Issuance Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="bg-[#001484] text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-base">Record New 2026 Issuance (Admin Only)</h3>
-              </div>
+            <div className="bg-[#001484] text-white px-5 py-3.5 flex items-center justify-between">
+              <h3 className="font-bold text-base">Record 2026 Special Order</h3>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="text-white/80 hover:text-white p-1 rounded"
+                className="text-white/80 hover:text-white p-1 rounded cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleAddSubmit} className="p-6 space-y-3 text-xs sm:text-sm text-slate-800">
-              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-900">
-                You are encoding as verified administrator: <span className="font-mono font-semibold">{userEmail}</span>
-              </div>
-
+            <form onSubmit={handleAddSubmit} className="p-5 space-y-3 text-xs sm:text-sm text-slate-800">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Document Routing Number (DRN) *</label>
                 <input
                   type="text"
                   required
-                  placeholder="I-FO-HRMDD-LDS-A-SO-26-01-..."
+                  placeholder="e.g. I-FO-HRMDD-LDS-A-SO-26-01-001"
                   value={newDrn}
                   onChange={(e) => setNewDrn(e.target.value)}
                   className="w-full border border-slate-300 rounded px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
@@ -495,30 +444,53 @@ export const IssuancesPage: React.FC<IssuancesPageProps> = ({ onBack, userEmail,
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Received / Printed By</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Date Printed</label>
                   <input
                     type="text"
-                    placeholder="Receiver name"
-                    value={newReceivedBy}
-                    onChange={(e) => setNewReceivedBy(e.target.value)}
+                    placeholder="Jan 15, 2026"
+                    value={newDatePrinted}
+                    onChange={(e) => setNewDatePrinted(e.target.value)}
                     className="w-full border border-slate-300 rounded px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
                   />
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-3 border-t border-slate-200">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Attach Document (Optional):</label>
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.doc,application/pdf"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setSelectedFile(e.target.files[0]);
+                    }
+                  }}
+                  className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[#001484] file:text-white hover:file:bg-blue-900 cursor-pointer"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2.5 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded text-slate-700 hover:bg-slate-100"
+                  className="px-4 py-1.5 border border-slate-300 rounded text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  disabled={isSaving}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#001484] text-white font-semibold rounded hover:bg-blue-900"
+                  disabled={isSaving}
+                  className="px-5 py-1.5 bg-[#001484] text-white font-semibold rounded hover:bg-blue-900 cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                 >
-                  Save & Publish RSO
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Order</span>
+                  )}
                 </button>
               </div>
             </form>
