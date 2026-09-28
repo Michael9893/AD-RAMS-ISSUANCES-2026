@@ -1,118 +1,40 @@
 import React, { useState } from 'react';
-import { ExternalLink, Folder, Table2, Download, Upload, Plus, Check } from 'lucide-react';
+import { ExternalLink, Folder, Table2, Download, Check } from 'lucide-react';
 import { TEMPLATES_DATA, TemplateItem } from '../data/templatesData';
-import { saveFileBlob, getFileUrl } from '../utils/fileStorage';
 
 interface TemplatesPageProps {
   onBack: () => void;
   selectedCategory?: string | null;
   onSelectCategory?: (category: string) => void;
-  userEmail: string | null;
 }
 
 export const TemplatesPage: React.FC<TemplatesPageProps> = ({
   onBack,
   selectedCategory,
-  onSelectCategory,
-  userEmail,
 }) => {
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>(selectedCategory || 'all');
-  const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const [customTemplates, setCustomTemplates] = useState<TemplateItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('ad_rams_custom_templates');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch {}
-    return [];
-  });
+  const fo1UniqueForms = TEMPLATES_DATA.filter((t) => t.category === 'fo1-unique');
+  const recordsRelatedForms = TEMPLATES_DATA.filter((t) => t.category === 'records-related');
+  const generalForms = TEMPLATES_DATA.filter((t) => t.category === 'general');
+  const adminServicesForms = TEMPLATES_DATA.filter((t) => t.category === 'admin-services');
 
-  const [newTitle, setNewTitle] = useState('');
-  const [newCategory, setNewCategory] = useState<TemplateItem['category']>('fo1-unique');
-  const [newFileType, setNewFileType] = useState<TemplateItem['fileType']>('word');
-
-  const allTemplates = [...TEMPLATES_DATA, ...customTemplates];
-
-  const fo1UniqueForms = allTemplates.filter((t) => t.category === 'fo1-unique');
-  const recordsRelatedForms = allTemplates.filter((t) => t.category === 'records-related');
-  const generalForms = allTemplates.filter((t) => t.category === 'general');
-  const adminServicesForms = allTemplates.filter((t) => t.category === 'admin-services');
-
-  const handleDownload = async (doc: TemplateItem) => {
+  const handleDownload = (doc: TemplateItem) => {
     setDownloadSuccess(doc.title);
-    setTimeout(() => setDownloadSuccess(null), 3500);
+    setTimeout(() => setDownloadSuccess(null), 3000);
 
-    // If there is an uploaded file blob associated with this item:
-    const fileUrl = await getFileUrl(doc.id);
-    if (fileUrl) {
-      const a = document.createElement('a');
-      a.href = fileUrl;
-      a.download = doc.title;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } else {
-      // Trigger a clean downloadable placeholder file with the official name
-      const ext = doc.fileType === 'excel' ? 'xlsx' : doc.fileType === 'sheets' ? 'csv' : 'docx';
-      const content = `DSWD Field Office 1 - Official Form Template\nTitle: ${doc.title}\nCategory: ${doc.categoryLabel}\nControlled Document - Records and Archives Management Section`;
-      const blob = new Blob([content], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = doc.title.includes('.') ? doc.title : `${doc.title}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-  };
-
-  const handleUploadSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
-
-    const categoryLabelMap = {
-      'fo1-unique': 'FO 1 UNIQUE FORMS',
-      'records-related': 'RECORDS RELATED FORMS',
-      general: 'GENERAL FORMS',
-      'admin-services': 'ADMINISTRATIVE SERVICES FORMS',
-    };
-
-    const docId = `custom-tpl-${Date.now()}`;
-
-    if (selectedFile) {
-      try {
-        await saveFileBlob(docId, selectedFile);
-      } catch (err) {
-        console.warn('Could not save template blob:', err);
-      }
-    }
-
-    const newItem: TemplateItem = {
-      id: docId,
-      title: newTitle,
-      category: newCategory,
-      categoryLabel: categoryLabelMap[newCategory],
-      lastModified: `Today Records Administration Management Section FO 01`,
-      fileType: newFileType,
-      author: 'Records Administration Management Section FO 01',
-      isFolder: newFileType === 'folder',
-    };
-
-    const updated = [newItem, ...customTemplates];
-    setCustomTemplates(updated);
-    try {
-      localStorage.setItem('ad_rams_custom_templates', JSON.stringify(updated));
-    } catch {}
-
-    setIsUploadOpen(false);
-    setNewTitle('');
-    setSelectedFile(null);
+    const ext = doc.fileType === 'excel' ? 'xlsx' : doc.fileType === 'sheets' ? 'csv' : 'docx';
+    const content = `DSWD Field Office 1 - Official Form Template\nTitle: ${doc.title}\nCategory: ${doc.categoryLabel}\nControlled Document - Records and Archives Management Section`;
+    const blob = new Blob([content], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.title.includes('.') ? doc.title : `${doc.title}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const renderFileIcon = (type: TemplateItem['fileType']) => {
@@ -180,7 +102,7 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
             )}
           </div>
 
-          {/* Table Rows with scroll container matching original */}
+          {/* Table Rows */}
           <div className="divide-y divide-slate-100 max-h-[380px] overflow-y-auto">
             {items.map((doc) => {
               const parts = doc.lastModified.split(' ');
@@ -194,7 +116,6 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
                   onClick={() => handleDownload(doc)}
                 >
                   <div className="flex items-center gap-6 w-full pr-3">
-                    {/* Left: Icon + Title */}
                     <div className="flex items-center gap-2.5 w-1/2 sm:w-5/12 min-w-0">
                       {renderFileIcon(doc.fileType)}
                       <span className="text-xs sm:text-[13px] text-slate-900 group-hover:text-blue-900 font-normal truncate">
@@ -202,7 +123,6 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
                       </span>
                     </div>
 
-                    {/* Right: Last Modified */}
                     <div className="flex-1 text-xs text-slate-500 truncate">
                       <span className="font-semibold text-slate-800">{datePart}</span>{' '}
                       <span className="text-slate-500">{authorPart}</span>
@@ -224,67 +144,57 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
   return (
     <section className="w-full bg-[#f1eff7] px-4 sm:px-8 md:px-12 pt-2 pb-12 select-none">
       <div className="max-w-[1500px] mx-auto space-y-8">
-        {/* Top Control Bar: Category Quick-Filter & Upload Button */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 pt-1 border-b border-slate-200">
-          <div className="flex items-center gap-2 overflow-x-auto text-xs py-1">
-            <button
-              onClick={() => setActiveFilter('all')}
-              className={`px-3 py-1.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
-                activeFilter === 'all'
-                  ? 'bg-[#00178c] text-white font-semibold shadow-xs'
-                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              All Categories
-            </button>
-            <button
-              onClick={() => setActiveFilter('fo1-unique')}
-              className={`px-3 py-1.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
-                activeFilter === 'fo1-unique'
-                  ? 'bg-[#00178c] text-white font-semibold shadow-xs'
-                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              FO 1 UNIQUE FORMS
-            </button>
-            <button
-              onClick={() => setActiveFilter('records-related')}
-              className={`px-3 py-1.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
-                activeFilter === 'records-related'
-                  ? 'bg-[#00178c] text-white font-semibold shadow-xs'
-                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              RECORDS RELATED FORMS
-            </button>
-            <button
-              onClick={() => setActiveFilter('general')}
-              className={`px-3 py-1.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
-                activeFilter === 'general'
-                  ? 'bg-[#00178c] text-white font-semibold shadow-xs'
-                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              GENERAL FORMS
-            </button>
-            <button
-              onClick={() => setActiveFilter('admin-services')}
-              className={`px-3 py-1.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
-                activeFilter === 'admin-services'
-                  ? 'bg-[#00178c] text-white font-semibold shadow-xs'
-                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              ADMINISTRATIVE SERVICES FORMS
-            </button>
-          </div>
-
+        {/* Top Filter Buttons */}
+        <div className="flex items-center gap-2 overflow-x-auto text-xs py-1 border-b border-slate-200 pb-2">
           <button
-            onClick={() => setIsUploadOpen(true)}
-            className="px-3 py-1.5 bg-[#00178c] hover:bg-blue-900 text-white rounded text-xs font-medium flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer ml-auto"
+            onClick={() => setActiveFilter('all')}
+            className={`px-3 py-1.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
+              activeFilter === 'all'
+                ? 'bg-[#00178c] text-white font-semibold shadow-xs'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
           >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Upload Template (Admin)</span>
+            All Categories
+          </button>
+          <button
+            onClick={() => setActiveFilter('fo1-unique')}
+            className={`px-3 py-1.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
+              activeFilter === 'fo1-unique'
+                ? 'bg-[#00178c] text-white font-semibold shadow-xs'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            FO 1 UNIQUE FORMS
+          </button>
+          <button
+            onClick={() => setActiveFilter('records-related')}
+            className={`px-3 py-1.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
+              activeFilter === 'records-related'
+                ? 'bg-[#00178c] text-white font-semibold shadow-xs'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            RECORDS RELATED FORMS
+          </button>
+          <button
+            onClick={() => setActiveFilter('general')}
+            className={`px-3 py-1.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
+              activeFilter === 'general'
+                ? 'bg-[#00178c] text-white font-semibold shadow-xs'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            GENERAL FORMS
+          </button>
+          <button
+            onClick={() => setActiveFilter('admin-services')}
+            className={`px-3 py-1.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
+              activeFilter === 'admin-services'
+                ? 'bg-[#00178c] text-white font-semibold shadow-xs'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            ADMINISTRATIVE SERVICES FORMS
           </button>
         </div>
 
@@ -292,13 +202,13 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
           <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded text-xs flex items-center gap-2 animate-in fade-in">
             <Check className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>
-              <strong>Downloading form template:</strong> {downloadSuccess}
+              <strong>Downloading template:</strong> {downloadSuccess}
             </span>
           </div>
         )}
 
         {/* 2-Column Pairs Layout matching Screenshots */}
-        {/* Pair 1: GENERAL FORMS & ADMINISTRATIVE SERVICES FORMS (Image 1) */}
+        {/* Pair 1: GENERAL FORMS & ADMINISTRATIVE SERVICES FORMS */}
         {(activeFilter === 'all' || activeFilter === 'general' || activeFilter === 'admin-services') && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             {(activeFilter === 'all' || activeFilter === 'general') &&
@@ -308,7 +218,7 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
           </div>
         )}
 
-        {/* Pair 2: FO 1 UNIQUE FORMS & RECORDS RELATED FORMS (Image 2 & 3) */}
+        {/* Pair 2: FO 1 UNIQUE FORMS & RECORDS RELATED FORMS */}
         {(activeFilter === 'all' || activeFilter === 'fo1-unique' || activeFilter === 'records-related') && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start pt-4">
             {(activeFilter === 'all' || activeFilter === 'fo1-unique') &&
@@ -318,7 +228,7 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
           </div>
         )}
 
-        {/* Back Button matching Screenshot 3 */}
+        {/* Back Button */}
         <div className="flex justify-end pt-8 pb-2">
           <button
             onClick={onBack}
@@ -328,104 +238,6 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
           </button>
         </div>
       </div>
-
-      {/* Admin Upload Modal */}
-      {isUploadOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="bg-[#00178c] text-white px-6 py-4 flex items-center justify-between">
-              <h3 className="font-bold text-base">Add / Upload Official Template</h3>
-              <button
-                onClick={() => setIsUploadOpen(false)}
-                className="text-white/80 hover:text-white p-1 rounded cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleUploadSubmit} className="p-6 space-y-4 text-xs sm:text-sm text-slate-800">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Upload File (Optional):</label>
-                <input
-                  type="file"
-                  accept=".docx,.xlsx,.xls,.pdf,.doc,.csv"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      const file = e.target.files[0];
-                      setSelectedFile(file);
-                      if (!newTitle) setNewTitle(file.name);
-                      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv')) {
-                        setNewFileType('excel');
-                      } else if (file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
-                        setNewFileType('word');
-                      } else if (file.name.endsWith('.pdf')) {
-                        setNewFileType('word');
-                      }
-                    }
-                  }}
-                  className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[#00178c] file:text-white hover:file:bg-blue-900 cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Target Category *</label>
-                <select
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value as any)}
-                  className="w-full border border-slate-300 rounded px-3 py-2 text-xs sm:text-sm bg-white focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                >
-                  <option value="fo1-unique">FO 1 UNIQUE FORMS</option>
-                  <option value="records-related">RECORDS RELATED FORMS</option>
-                  <option value="general">GENERAL FORMS</option>
-                  <option value="admin-services">ADMINISTRATIVE SERVICES FORMS</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">File Format / Type</label>
-                <select
-                  value={newFileType}
-                  onChange={(e) => setNewFileType(e.target.value as any)}
-                  className="w-full border border-slate-300 rounded px-3 py-2 text-xs sm:text-sm bg-white focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                >
-                  <option value="word">Word Document (.docx)</option>
-                  <option value="excel">Excel Spreadsheet (.xlsx)</option>
-                  <option value="sheets">Google Sheets Form</option>
-                  <option value="folder">Directory / Folder</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Template Title *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. DSWD-GF-006_REV 01_Travel Order Form.docx"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full border border-slate-300 rounded px-3 py-2 text-xs sm:text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsUploadOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded text-slate-700 hover:bg-slate-100 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-[#00178c] text-white font-semibold rounded hover:bg-blue-900 cursor-pointer shadow-xs"
-                >
-                  Save Template
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </section>
   );
 };

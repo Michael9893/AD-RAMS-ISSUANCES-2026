@@ -6,16 +6,12 @@ interface HeaderBannerProps {
   onOpenTemplates?: (type?: string) => void;
   onSelectTemplatesCategory?: (category: string) => void;
   activeNav?: string;
-  userEmail?: string | null;
-  onOpenAuth: () => void;
 }
 
 export const HeaderBanner: React.FC<HeaderBannerProps> = ({
   onSelectNav,
   onSelectTemplatesCategory,
   activeNav = 'Home',
-  userEmail,
-  onOpenAuth,
 }) => {
   const [templatesDropdownOpen, setTemplatesDropdownOpen] = useState(false);
 
@@ -215,20 +211,6 @@ export const HeaderBanner: React.FC<HeaderBannerProps> = ({
             }`}
           >
             2026
-          </button>
-
-          {/* Admin status button */}
-          <button
-            onClick={onOpenAuth}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs transition-colors cursor-pointer ${
-              userEmail
-                ? 'bg-blue-900 text-white hover:bg-blue-950 font-medium'
-                : 'bg-white/80 text-slate-800 border border-slate-300 hover:bg-white'
-            }`}
-            title={userEmail ? `Admin mode active (${userEmail})` : 'Click to enable Admin mode'}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span>{userEmail ? 'Admin Mode' : 'Admin Login'}</span>
           </button>
         </nav>
       </div>

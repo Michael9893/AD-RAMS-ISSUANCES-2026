@@ -5,15 +5,15 @@ import { SopItem } from '../data/sopData';
 interface SopModalProps {
   sop: SopItem | null;
   onClose: () => void;
-  userEmail: string | null;
-  onOpenAuth: () => void;
+  userEmail?: string | null;
+  onOpenAuth?: () => void;
 }
 
 export const SopModal: React.FC<SopModalProps> = ({
   sop,
   onClose,
-  userEmail,
-  onOpenAuth,
+  userEmail = 'records.staff@dswd.gov.ph',
+  onOpenAuth = () => {},
 }) => {
   const [activeTab, setActiveTab] = useState<'procedure' | 'request' | 'documents'>('procedure');
   const [formData, setFormData] = useState({

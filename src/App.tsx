@@ -13,8 +13,6 @@ import { TemplatesPage } from './components/TemplatesPage';
 import { IssuancesPage } from './components/IssuancesPage';
 import { Footer } from './components/Footer';
 import { SopModal } from './components/SopModal';
-import { AuthModal } from './components/AuthModal';
-import { ResourcesModal } from './components/ResourcesModal';
 import { PdfViewerModal } from './components/PdfViewerModal';
 import { SopItem } from './data/sopData';
 import { PdfDoc } from './types';
@@ -58,59 +56,7 @@ export default function App() {
   const [selectedTemplatesCategory, setSelectedTemplatesCategory] = useState<string | null>(null);
 
   const [selectedSop, setSelectedSop] = useState<SopItem | null>(null);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>('admin@dswd.gov.ph');
-
-  // PDF Document Viewer State
   const [selectedPdf, setSelectedPdf] = useState<PdfDoc | null>(null);
-
-  // PDF List State (with local storage persistence for admin uploads)
-  const [pdfList, setPdfList] = useState<PdfDoc[]>(() => {
-    try {
-      const saved = localStorage.getItem('ad_rams_pdf_list');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return DEFAULT_PDF_LIST;
-  });
-
-  const handleAddPdf = (newDoc: PdfDoc) => {
-    setPdfList((prev) => {
-      const updated = [newDoc, ...prev];
-      try {
-        // Strip large dataUrl/fileUrl to avoid browser localStorage quota limits
-        const sanitized = updated.map(({ fileUrl, ...rest }) => rest);
-        localStorage.setItem('ad_rams_pdf_list', JSON.stringify(sanitized));
-      } catch (err) {
-        console.warn('LocalStorage save failed:', err);
-      }
-      return updated;
-    });
-  };
-
-  const handleDeletePdf = (id: string) => {
-    setPdfList((prev) => {
-      const updated = prev.filter((d) => d.id !== id);
-      try {
-        const sanitized = updated.map(({ fileUrl, ...rest }) => rest);
-        localStorage.setItem('ad_rams_pdf_list', JSON.stringify(sanitized));
-      } catch {
-        // ignore
-      }
-      return updated;
-    });
-  };
-
-  // Issuances modal state
-  const [resourcesModalOpen, setResourcesModalOpen] = useState(false);
-  const [resourceModalType, setResourceModalType] = useState<'resources' | 'templates' | 'issuances'>('issuances');
-  const [selectedResourceItem, setSelectedResourceItem] = useState<string | undefined>(undefined);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f1eff7] text-slate-800 font-sans selection:bg-blue-600 selection:text-white">
@@ -138,13 +84,11 @@ export default function App() {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         activeNav={activeNav}
-        userEmail={userEmail}
-        onOpenAuth={() => setAuthModalOpen(true)}
       />
 
       {/* Main Body Content */}
       <main className="flex-1 w-full">
-        {/* 2. Disclaimer Notice with Top and Bottom Dividers (appears on Home, Resources, Templates, and 2026 per screenshots) */}
+        {/* 2. Disclaimer Notice with Top and Bottom Dividers */}
         <DisclaimerNotice />
 
         {activeNav === 'Home' && (
@@ -169,16 +113,12 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             onOpenPdf={(doc) => setSelectedPdf(doc)}
-            userEmail={userEmail}
-            onOpenAuth={() => setAuthModalOpen(true)}
-            pdfList={pdfList}
-            onAddPdf={handleAddPdf}
-            onDeletePdf={handleDeletePdf}
+            pdfList={DEFAULT_PDF_LIST}
           />
         )}
 
         {activeNav === 'Templates' && (
-          /* Templates Page View (Carbon copy of uploaded screenshots) */
+          /* Templates Page View with 4 Categories */
           <TemplatesPage
             onBack={() => {
               setActiveNav('Home');
@@ -186,19 +126,16 @@ export default function App() {
             }}
             selectedCategory={selectedTemplatesCategory}
             onSelectCategory={(cat) => setSelectedTemplatesCategory(cat)}
-            userEmail={userEmail}
           />
         )}
 
         {(activeNav === '2026' || (activeNav as string) === 'Administrative Issuances') && (
-          /* 2026 Issuances Page View */
+          /* 2026 Regional Special Orders Page View */
           <IssuancesPage
             onBack={() => {
               setActiveNav('Home');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            userEmail={userEmail}
-            onOpenAuth={() => setAuthModalOpen(true)}
           />
         )}
       </main>
@@ -211,8 +148,6 @@ export default function App() {
         <SopModal
           sop={selectedSop}
           onClose={() => setSelectedSop(null)}
-          userEmail={userEmail}
-          onOpenAuth={() => setAuthModalOpen(true)}
         />
       )}
 
@@ -222,23 +157,6 @@ export default function App() {
           onClose={() => setSelectedPdf(null)}
         />
       )}
-
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        userEmail={userEmail}
-        onLogin={(email) => setUserEmail(email)}
-        onLogout={() => setUserEmail(null)}
-      />
-
-      <ResourcesModal
-        isOpen={resourcesModalOpen}
-        onClose={() => setResourcesModalOpen(false)}
-        type={resourceModalType}
-        initialItem={selectedResourceItem}
-        userEmail={userEmail}
-        onOpenAuth={() => setAuthModalOpen(true)}
-      />
     </div>
   );
 }
