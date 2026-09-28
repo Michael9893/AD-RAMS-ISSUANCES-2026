@@ -1,0 +1,6 @@
+{
+  "name": "AD-RAMS Portal - DSWD Records and Archives Management Section",
+  "description": "Official carbon copy portal of the DSWD Administrative Division - Records and Archives Management Section (AD-RAMS) featuring SOPs, resources, templates, and issuances.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .font-script {
+    font-family: 'Pacifico', cursive;
+  }
+  .font-script-mandate {
+    font-family: 'Pacifico', 'Yellowtail', 'Satisfy', cursive;
+  }
+}
+
+/* Custom smooth styling */
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f1eff7;
+}
